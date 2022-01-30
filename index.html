@@ -20,6 +20,7 @@
       }
       .slider {
         width: 32px;
+        min-width: 32px;
         height: 20px;
         position: relative;
         border-radius: 50px;
@@ -362,7 +363,7 @@
         pointer-events: none;
         transition: opacity 0.2s ease-in;
       }
-      @media (max-width: 360px) {
+      @media (max-width: 740px) {
         .overlay {
           left: 0;
           right: 0;
@@ -484,6 +485,7 @@
       </div>
       <div class="settings">
         <button class="settings-close"></button>
+        <br>
         <b style="align-self: center; font-size: 17px;">SETTINGS</b>
         <br>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -492,6 +494,15 @@
             <span style="font-size: 12px; color: #787c7e;">Any revealed hints must be used in subsequent guesses</span>
           </div>
           <div class="slider" prop="hardMode"></div>
+        </div>
+        <div class="line-sep"></div>
+        <br>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-size: 18px;">Ultra Hard Mode</span>
+            <span style="font-size: 12px; color: #787c7e; max-width: 70%;">Forbids you to use letters that have already been tried and place yellow letters on the same slot. This also enables Hard Mode.</span>
+          </div>
+          <div class="slider" prop="ultraHardMode"></div>
         </div>
         <div class="line-sep"></div>
       </div>
@@ -504,7 +515,8 @@
       config: {
         attempts: 6,
         wordLength: 5,
-        hardMode: false
+        hardMode: false,
+        ultraHardMode: false
       },
       lettersTried: {},
       wordsTried: [],
@@ -725,11 +737,10 @@
           currentGuess[index] = undefined
         } else if (
           ultra &&
-          lastAttempt[index] !== wordToGuess[index] &&
-          wordToGuess.includes(lastAttempt[index]) &&
-          currentGuess[index] === lastAttempt[index]
+          state.lettersTried[currentGuess[index]] === 'semi' &&
+          state.wordsTried.some(w => w.charAt(index) === currentGuess[index])
         ) {
-          return `${index + 1}${s} letter must not be ${lastAttempt[index].toUpperCase()}`
+          return `${index + 1}${s} letter must not be ${currentGuess[index].toUpperCase()}`
         }
       }
       for (let index = 0; index < wordToGuess.length; index++) {
@@ -746,8 +757,17 @@
       }
       if (ultra) {
         for (let index = 0; index < wordToGuess.length; index++) {
-          if (currentGuess[index] && !wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]]) {
+          if (currentGuess[index] && !state.wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]] ) {
             return `Must not contain letter ${currentGuess[index].toUpperCase()}`
+          }
+          if (currentGuess[index] && state.lettersTried[currentGuess[index]] === 'semi') {
+            let regex = new RegExp(`[^${currentGuess[index]}]`, 'ig')
+            let repetitions = word.replace(regex, '').length
+            let lastAttemptRepetitions = state.wordsTried.slice(-1)[0].replace(regex, '').length
+            let answerRepetitions = state.wordToGuess.replace(regex, '').length
+            if (lastAttemptRepetitions > answerRepetitions && repetitions >= lastAttemptRepetitions) {
+              return `There are too many ${currentGuess[index].toUpperCase()}s`
+            }
           }
         }
       }
@@ -765,8 +785,8 @@
       } else if (isGameOver()) {
         return
       }
-      if (state.config.hardMode) {
-        let problem = checkHardInput(word, state.config.hardMode === 'ultra')
+      if (state.config.hardMode || state.config.ultraHardMode) {
+        let problem = checkHardInput(word, state.config.ultraHardMode)
         if (problem) {
           return displayToast(problem)
         }
@@ -938,11 +958,29 @@
       localStorage.setItem('state', JSON.stringify(state))
     }
 
+    function mergeObjs (src, obj) {
+      if (typeof src !== 'object' || !src ||
+          typeof obj !== 'object' || !obj) {
+        return src
+      }
+      for (let key in obj) {
+        let srcValue = src[key]
+        let objValue = obj[key]
+        if (typeof srcValue === 'object' && srcValue &&
+            typeof objValue === 'object' && objValue) {
+          mergeObjs(srcValue, objValue)
+        } else {
+          src[key] = objValue
+        }
+      }
+      return src
+    }
+
     function loadState () {
       try {
         let data = JSON.parse(localStorage.getItem('state'))
         if (data) {
-          Object.assign(state, data)
+          mergeObjs(state, data)
         }
         return state
       } catch (err) {
@@ -1114,8 +1152,8 @@
     }
 
     function onSliderChange (prop, bool) {
-      if (prop === 'hardMode') {
-        state.config.hardMode = !!bool
+      if (prop in state.config) {
+        state.config[prop] = !!bool
         saveState()
       }
     }
