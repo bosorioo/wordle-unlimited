@@ -111,6 +111,7 @@
         font-size: 2rem;
         font-weight: bold;
         transform-origin: center;
+        user-select: none;
       }
       .letter:not(:last-child) {
         margin-right: 5px;
@@ -572,24 +573,34 @@
       let lettersDivs = Array.from(wordDiv.children)
       let hints = lettersToGuess.slice()
       let animationDuration = 350
+      let letterClasses = {}
       for (let index = 0; index < state.config.wordLength; index++) {
         let correctLetter = lettersToGuess[index]
         let guessedLetter = lettersGuessed[index]
-        let letterDiv = lettersDivs[index]
+        if (correctLetter === guessedLetter) {
+          hints[index] = undefined
+          letterClasses[index] = 'correct'
+        }
+      }
+      for (let index = 0; index < state.config.wordLength; index++) {
+        if (letterClasses[index] === 'correct') {
+          continue
+        }
+        let correctLetter = lettersToGuess[index]
+        let guessedLetter = lettersGuessed[index]
         let letterClass = 'incorrect'
         if (hints.includes(guessedLetter)) {
           let semiIndex = hints.indexOf(guessedLetter)
           hints[semiIndex] = undefined
-          letterClass = correctLetter === guessedLetter ? 'correct' : 'semi'
+          letterClass = 'semi'
         }
+        letterClasses[index] = letterClass
+      }
+      for (let index = 0; index < state.config.wordLength; index++) {
+        let letterDiv = lettersDivs[index]
+        let guessedLetter = lettersGuessed[index]
         let keyboardKeyState = state.lettersTried[guessedLetter] || ''
-        let keyboardKeyNextState
-        if (!keyboardKeyState || keyboardKeyState === 'incorrect' ||
-            (keyboardKeyState === 'semi' && letterClass === 'correct') ||
-            (keyboardKeyState === letterClass)) {
-          keyboardKeyNextState = letterClass
-          state.lettersTried[guessedLetter] = letterClass
-        }
+        let keyboardKeyNextState = letterClasses[index]
         letterDiv
           .animate({ transform: [ 'rotateX(0)', 'rotateX(-90deg)' ] }, {
             duration: animationDuration * 0.5,
@@ -598,8 +609,15 @@
           })
           .addEventListener('finish', (event) => {
             event.target.finish()
+            let letterClass = letterClasses[index]
             if (letterClass) {
               letterDiv.classList.add(letterClass)
+              let keyboardKeyState = state.lettersTried[guessedLetter] || ''
+              if (!keyboardKeyState || keyboardKeyState === 'incorrect' ||
+                  (keyboardKeyState === 'semi' && letterClass === 'correct') ||
+                  (keyboardKeyState === letterClass)) {
+                state.lettersTried[guessedLetter] = letterClass
+              }
               if (keyboardKeyNextState) {
                 let keyboardBtn = document.querySelector('.key-' + guessedLetter)
                 if (keyboardBtn) {
@@ -760,7 +778,7 @@
           if (currentGuess[index] && !state.wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]] ) {
             return `Must not contain letter ${currentGuess[index].toUpperCase()}`
           }
-          if (currentGuess[index] && state.lettersTried[currentGuess[index]] === 'semi') {
+          if (currentGuess[index] && /^(semi|correct)$/.test(state.lettersTried[currentGuess[index]])) {
             let regex = new RegExp(`[^${currentGuess[index]}]`, 'ig')
             let repetitions = word.replace(regex, '').length
             let lastAttemptRepetitions = state.wordsTried.slice(-1)[0].replace(regex, '').length
