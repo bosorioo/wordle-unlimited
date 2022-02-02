@@ -617,10 +617,9 @@
                   (keyboardKeyState === 'semi' && letterClass === 'correct') ||
                   (keyboardKeyState === letterClass)) {
                 state.lettersTried[guessedLetter] = letterClass
-              }
-              if (keyboardKeyNextState) {
                 let keyboardBtn = document.querySelector('.key-' + guessedLetter)
                 if (keyboardBtn) {
+                  keyboardBtn.classList.remove('incorrect', 'semi')
                   keyboardBtn.classList.add(keyboardKeyNextState)
                 }
               }
