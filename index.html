@@ -437,7 +437,7 @@
       <div class="end-actions">
         <span></span>
         <span>Answer</span>
-        <button tabindex="-1" onclick="onClickPlayAgain()">Play<br>Again</button>
+        <button id="playagain" tabindex="-1" onclick="onClickPlayAgain()">Play<br>Again</button>
       </div>
     </div>
     <div class="modal">
@@ -835,6 +835,7 @@
     function onType (e) {
       if (e.key === 'Enter') {
         makeAttempt(getCurrentTypedWord())
+        onClickPlayAgain()
         if (typeof e.preventDefault === 'function') {
           e.preventDefault()
           e.stopPropagation()
