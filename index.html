@@ -543,8 +543,8 @@
       }, duration)
     }
 
-    function getCurrentWordDiv () {
-      return Array.from(document.querySelector('.words').children)[state.wordsTried.length]
+    function getCurrentWordDiv (offset = 0) {
+      return Array.from(document.querySelector('.words').children)[state.wordsTried.length + offset]
     }
 
     function getCurrentTypedWord () {
@@ -562,9 +562,12 @@
     }
 
     function isAnimatingHints () {
-      const wordDiv = getCurrentWordDiv()
+      const wordDiv = getCurrentWordDiv(-1)
+      if (!wordDiv) {
+        return false
+      }
       const lettersDivs = Array.from(wordDiv.children)
-      return letterDivs.some(l => l.getAnimations().length > 0)
+      return lettersDivs.some(l => l.getAnimations().some(a => a.playState !== 'finished'))
     }
 
     function addHints (wordDiv, onEndAnimation, quick = state.config.quickAnimations) {
@@ -798,7 +801,7 @@
       word = word.replace(/[^a-z]+/gi, '').toLowerCase()
       const dictionary = dictionaries[state.config.wordLength]
       if (word.length !== state.config.wordLength) {
-        if (!isAnimatingHints() && word.length === 0) {
+        if (!isAnimatingHints()) {
           displayToast('Not enough letters')
         }
         return
@@ -989,7 +992,7 @@
 
     function onClickPlayAgain () {
       if (document.body.classList.contains('game-over') &&
-          document.querySelector('.end-actions button').getAnimations().length === 0) {
+          document.querySelector('.end-actions button').getAnimations().every(a => a.playState === 'finished')) {
         const autoFirstAttempt = state.config.autoFirstWord && document.getElementById('word-answer').innerHTML
         resetGame(true)
         setupCandidatesLeft()
@@ -1104,7 +1107,7 @@
         toggleModal(false)
       }, { capture: true })
       backdrop.addEventListener('click', () => {
-        if (backdrop.getAnimations().length > 0 ) {
+        if (backdrop.getAnimations().some(a => a.playState !== 'finished')) {
           return
         }
         btnCloseModal.click()
