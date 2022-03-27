@@ -5,13 +5,15 @@
     <title>Unlimited Wordle - A word game</title>
     <style>
       body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         margin: 0;
         width: 100vw;
         background: #121213;
         font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
         color: #d7dadc;
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow: auto;
       }
       button {
         cursor: pointer;
@@ -67,7 +69,7 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translate(-50%, calc(-50% - 2px));
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -77,11 +79,12 @@
       }
       .title span:first-child {
         font-size: 36px;
+        line-height: 40px;
       }
       .title span:last-child {
         font-size: 10px;
         letter-spacing: 11px;
-        line-height: 3px;
+        line-height: 12px;
       }
       @media (max-width: 360px) {
         .title span:first-child {
@@ -140,7 +143,6 @@
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        margin-top: 16px;
         transition: opacity 0.2s ease-in-out;
       }
       .keyboard-row {
@@ -363,6 +365,7 @@
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease-in;
+        padding: 0 20px;
       }
       @media (max-width: 740px) {
         .overlay {
@@ -411,9 +414,17 @@
         padding-top: 12px;
         font-size: 14px;
         position: relative;
+        user-select: none;
       }
       .settings:not(.show) {
         display: none;
+      }
+      .settings > div:not(.line-sep) {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 0 12px;
       }
     </style>
   </head>
@@ -432,10 +443,11 @@
       </div>
     </div>
     <div class="words"></div>
-    <div style="position: relative;">
+    <span id="candidates-left" style="margin-top: 16px;"></span>
+    <div style="position: relative; margin-top: 16px;">
       <div class="keyboard"></div>
       <div class="end-actions">
-        <span></span>
+        <span id="word-answer"></span>
         <span>Answer</span>
         <button id="playagain" tabindex="-1" onclick="onClickPlayAgain()">Play<br>Again</button>
       </div>
@@ -488,24 +500,6 @@
         <button class="settings-close"></button>
         <br>
         <b style="align-self: center; font-size: 17px;">SETTINGS</b>
-        <br>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 18px;">Hard Mode</span>
-            <span style="font-size: 12px; color: #787c7e;">Any revealed hints must be used in subsequent guesses</span>
-          </div>
-          <div class="slider" prop="hardMode"></div>
-        </div>
-        <div class="line-sep"></div>
-        <br>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 18px;">Ultra Hard Mode</span>
-            <span style="font-size: 12px; color: #787c7e; max-width: 70%;">Forbids you to use letters that have already been tried and place yellow letters on the same slot. This also enables Hard Mode.</span>
-          </div>
-          <div class="slider" prop="ultraHardMode"></div>
-        </div>
-        <div class="line-sep"></div>
       </div>
     </div>
     <div class="backdrop"></div>
@@ -517,7 +511,10 @@
         attempts: 6,
         wordLength: 5,
         hardMode: false,
-        ultraHardMode: false
+        ultraHardMode: false,
+        displayCandidates: false,
+        autoFirstWord: false,
+        quickAnimations: false
       },
       lettersTried: {},
       wordsTried: [],
@@ -564,7 +561,13 @@
         : letters.find(node => node.childElementCount === 0)
     }
 
-    function addHints (wordDiv, onEndAnimation, quick = false) {
+    function isAnimatingHints () {
+      const wordDiv = getCurrentWordDiv()
+      const lettersDivs = Array.from(wordDiv.children)
+      return letterDivs.some(l => l.getAnimations().length > 0)
+    }
+
+    function addHints (wordDiv, onEndAnimation, quick = state.config.quickAnimations) {
       if (!wordDiv) {
         wordDiv = getCurrentWordDiv()
       }
@@ -736,54 +739,55 @@
     }
 
     function checkHardInput (word, ultra = false) {
-      let lastAttempt = state.wordsTried.slice(-1)[0]
-      let wordToGuess = Array.from(state.wordToGuess)
-      let currentGuess = Array.from(word)
-      if (!lastAttempt) {
-        return false
-      }
-      lastAttempt = Array.from(lastAttempt)
-      for (let index = 0; index < wordToGuess.length; index++) {
-        let s = [ 'st', 'nd', 'rd' ][index] || 'th'
-        if (lastAttempt[index] === wordToGuess[index]) {
-          if (currentGuess[index] !== lastAttempt[index]) {
-            return `${index + 1}${s} letter must be ${lastAttempt[index].toUpperCase()}`
-          }
-          lastAttempt[index] = undefined
-          wordToGuess[index] = undefined
-          currentGuess[index] = undefined
-        } else if (
-          ultra &&
-          state.lettersTried[currentGuess[index]] === 'semi' &&
-          state.wordsTried.some(w => w.charAt(index) === currentGuess[index])
-        ) {
-          return `${index + 1}${s} letter must not be ${currentGuess[index].toUpperCase()}`
+      for (let attemptMade of state.wordsTried) {
+        let wordToGuess = Array.from(state.wordToGuess)
+        let currentGuess = Array.from(word)
+        if (!attemptMade) {
+          continue
         }
-      }
-      for (let index = 0; index < wordToGuess.length; index++) {
-        if (lastAttempt[index] && wordToGuess.includes(lastAttempt[index])) {
-          let currentGuessIndex = currentGuess.indexOf(lastAttempt[index])
-          let wordToGuessIndex = wordToGuess.indexOf(lastAttempt[index])
-          if (currentGuessIndex === -1) {
-            return `Must contain letter ${lastAttempt[index].toUpperCase()}`
-          }
-          currentGuess[currentGuessIndex] = undefined
-          wordToGuess[wordToGuessIndex] = undefined
-          lastAttempt[index] = undefined
-        }
-      }
-      if (ultra) {
+        attemptMade = Array.from(attemptMade)
         for (let index = 0; index < wordToGuess.length; index++) {
-          if (currentGuess[index] && !state.wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]] ) {
-            return `Must not contain letter ${currentGuess[index].toUpperCase()}`
+          let s = [ 'st', 'nd', 'rd' ][index] || 'th'
+          if (attemptMade[index] === wordToGuess[index]) {
+            if (currentGuess[index] !== attemptMade[index]) {
+              return `${index + 1}${s} letter must be ${attemptMade[index].toUpperCase()}`
+            }
+            attemptMade[index] = undefined
+            wordToGuess[index] = undefined
+            currentGuess[index] = undefined
+          } else if (
+            ultra &&
+            state.lettersTried[currentGuess[index]] === 'semi' &&
+            state.wordsTried.some(w => w.charAt(index) === currentGuess[index])
+          ) {
+            return `${index + 1}${s} letter must not be ${currentGuess[index].toUpperCase()}`
           }
-          if (currentGuess[index] && /^(semi|correct)$/.test(state.lettersTried[currentGuess[index]])) {
-            let regex = new RegExp(`[^${currentGuess[index]}]`, 'ig')
-            let repetitions = word.replace(regex, '').length
-            let lastAttemptRepetitions = state.wordsTried.slice(-1)[0].replace(regex, '').length
-            let answerRepetitions = state.wordToGuess.replace(regex, '').length
-            if (lastAttemptRepetitions > answerRepetitions && repetitions >= lastAttemptRepetitions) {
-              return `There are too many ${currentGuess[index].toUpperCase()}s`
+        }
+        for (let index = 0; index < wordToGuess.length; index++) {
+          if (attemptMade[index] && wordToGuess.includes(attemptMade[index])) {
+            let currentGuessIndex = currentGuess.indexOf(attemptMade[index])
+            let wordToGuessIndex = wordToGuess.indexOf(attemptMade[index])
+            if (currentGuessIndex === -1) {
+              return `Must contain letter ${attemptMade[index].toUpperCase()}`
+            }
+            currentGuess[currentGuessIndex] = undefined
+            wordToGuess[wordToGuessIndex] = undefined
+            attemptMade[index] = undefined
+          }
+        }
+        if (ultra) {
+          for (let index = 0; index < wordToGuess.length; index++) {
+            if (currentGuess[index] && !state.wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]] ) {
+              return `Must not contain letter ${currentGuess[index].toUpperCase()}`
+            }
+            if (currentGuess[index] && /^(semi|correct)$/.test(state.lettersTried[currentGuess[index]])) {
+              let regex = new RegExp(`[^${currentGuess[index]}]`, 'ig')
+              let repetitions = word.replace(regex, '').length
+              let lastAttemptRepetitions = state.wordsTried.slice(-1)[0].replace(regex, '').length
+              let answerRepetitions = state.wordToGuess.replace(regex, '').length
+              if (lastAttemptRepetitions > answerRepetitions && repetitions >= lastAttemptRepetitions) {
+                return `There are too many ${currentGuess[index].toUpperCase()}s`
+              }
             }
           }
         }
@@ -792,9 +796,12 @@
 
     function makeAttempt (word) {
       word = word.replace(/[^a-z]+/gi, '').toLowerCase()
-      let dictionary = dictionaries[state.config.wordLength]
+      const dictionary = dictionaries[state.config.wordLength]
       if (word.length !== state.config.wordLength) {
-        return displayToast('Not enough letters')
+        if (!isAnimatingHints() && word.length === 0) {
+          displayToast('Not enough letters')
+        }
+        return
       } else if (!dictionary || (!dictionary.wordsGuessable.has(word) && !dictionary.wordsAcceptable.has(word))) {
         return displayToast('Word not in dictionary')
       } else if (state.wordsTried.includes(word)) {
@@ -803,14 +810,19 @@
         return
       }
       if (state.config.hardMode || state.config.ultraHardMode) {
-        let problem = checkHardInput(word, state.config.ultraHardMode)
+        const problem = checkHardInput(word, state.config.ultraHardMode)
         if (problem) {
           return displayToast(problem)
         }
       }
       displayToast()
-      let div = getCurrentWordDiv()
+      clearLettersFilled()
+      for (const letter of word) {
+        fillLetter(letter)
+      }
+      const div = getCurrentWordDiv()
       addHints(div, () => {
+        setupCandidatesLeft()
         setTimeout(() => {
           if (isGameOver()) {
             onEndGame()
@@ -820,6 +832,16 @@
       div.classList.add('attempted')
       state.wordsTried.push(word)
       saveState()
+    }
+
+    function getPossibleWordsLeft () {
+      const dictionary = dictionaries[state.config.wordLength]
+      return [
+        dictionary.wordsGuessable,
+        dictionary.wordsAcceptable
+      ]
+        .flatMap(s => Array.from(s))
+        .filter(w => !checkHardInput(w, state.config.ultraHardMode))
     }
 
     function isGameOver () {
@@ -968,7 +990,12 @@
     function onClickPlayAgain () {
       if (document.body.classList.contains('game-over') &&
           document.querySelector('.end-actions button').getAnimations().length === 0) {
+        const autoFirstAttempt = state.config.autoFirstWord && document.getElementById('word-answer').innerHTML
         resetGame(true)
+        setupCandidatesLeft()
+        if (autoFirstAttempt) {
+          makeAttempt(autoFirstAttempt)
+        }
       }
     }
 
@@ -1005,45 +1032,68 @@
       }
     }
 
+    function setupCandidatesLeft () {
+      const el = document.getElementById('candidates-left')
+      if (el) {
+        if (state.config.displayCandidates) {
+          el.innerHTML = `Candidates left: ${getPossibleWordsLeft().length}`
+          el.style.display = ''
+        } else {
+          el.style.display = 'none'
+        }
+      }
+    }
+
+    function addSliderSetting (key, name, description) {
+      const settingsEl = document.querySelector('.settings')
+      settingsEl.innerHTML += '<br><div><div style="display: flex; flex-direction: column; max-width: 75%;"><span style="font-size: 18px;">' + name + '</span><span style="font-size: 12px; color: #787c7e;">' + description + '</span></div><div class="slider" prop="' + key + '"></div></div><div class="line-sep"></div>'
+    }
+
     function setupUI () {
+      addSliderSetting('hardMode', 'Hard Mode', 'Any revealed hints must be used in subsequent guesses.')
+      addSliderSetting('ultraHardMode', 'Ultra Hard Mode', 'Forbids you to use letters that have already been tried and place yellow letters on the same slot. This also enables Hard Mode.')
+      addSliderSetting('displayCandidates', 'Display Candidates Count', 'Shows how many words can be attempted that match every hint received.')
+      addSliderSetting('autoFirstWord', 'Auto First Word', 'Starts the next game with the word from the previous round.')
+      addSliderSetting('quickAnimations', 'Quick Animations', 'Makes animations run much quicker.')
       setupWordList()
       setupKeyboard()
+      setupCandidatesLeft()
 
-      let btnHowToPlay = document.getElementById('howtoplay')
+      const btnHowToPlay = document.getElementById('howtoplay')
       btnHowToPlay.innerHTML = SVG_HOWTO
       btnHowToPlay.addEventListener('click', e => {
         document.querySelector('.overlay').classList.add('show')
         document.querySelector('.howtoplay').classList.add('show')
         document.querySelector('.settings').classList.remove('show')
       })
-      let btnCloseHowToPlay = document.querySelector('.howtoplay-close')
+      const btnCloseHowToPlay = document.querySelector('.howtoplay-close')
       btnCloseHowToPlay.innerHTML = SVG_CLOSE
       btnCloseHowToPlay.addEventListener('click', e => {
         document.querySelector('.overlay').classList.remove('show')
       })
 
-      let btnStats = document.getElementById('stats')
+      const btnStats = document.getElementById('stats')
       btnStats.innerHTML = SVG_STATS
       btnStats.addEventListener('click', e => {
         setupEndGameModal()
         toggleModal(true)
       })
 
-      let btnSettings = document.getElementById('settings')
+      const btnSettings = document.getElementById('settings')
       btnSettings.innerHTML = SVG_SETTINGS
       btnSettings.addEventListener('click', e => {
         document.querySelector('.overlay').classList.add('show')
         document.querySelector('.howtoplay').classList.remove('show')
         document.querySelector('.settings').classList.add('show')
       })
-      let btnCloseSettings = document.querySelector('.settings-close')
+      const btnCloseSettings = document.querySelector('.settings-close')
       btnCloseSettings.innerHTML = SVG_CLOSE
       btnCloseSettings.addEventListener('click', e => {
         document.querySelector('.overlay').classList.remove('show')
       })
 
-      let btnCloseModal = document.querySelector('.modal-close')
-      let backdrop = document.querySelector('.backdrop')
+      const btnCloseModal = document.querySelector('.modal-close')
+      const backdrop = document.querySelector('.backdrop')
       btnCloseModal.innerHTML = SVG_CLOSE
       btnCloseModal.addEventListener('click', (e) => {
         if (!document.querySelector('.modal').classList.contains('show')) {
@@ -1174,6 +1224,9 @@
         state.config[prop] = !!bool
         saveState()
       }
+      if (/displayCandidates|hard/i.test(prop)) {
+        setupCandidatesLeft()
+      }
     }
 
     function onInit () {
@@ -1181,8 +1234,8 @@
 
       window.addEventListener('keydown', onType, { capture: true })
 
-      setupUI()
       setupDictionary()
+      setupUI()
 
       if (!state.wordToGuess) {
         resetGame()
