@@ -1046,9 +1046,35 @@
     }
 
     async function writeToClipboard (content) {
-      const result = await navigator.permissions.query({ name: 'clipboard-write' })
-      if (result.state === 'granted') {
-        navigator.clipboard.writeText(content)
+      let success = false
+      try {
+        const result = await navigator.permissions.query({ name: 'clipboard-write' })
+        if (result.state === 'granted') {
+          await navigator.clipboard.writeText(content)
+          success = true
+        } else {
+          throw new Error('forbidden')
+        }
+      } catch (err) {
+      }
+      if (!success) {
+        const element = document.createElement('div')
+        element.innerHTML = content
+        Object.assign(element.style, {
+          opacity: 0,
+          pointerEvents: 'none',
+          position: 'fixed',
+          transform: 'translateX(-100%)',
+          whiteSpace: 'pre'
+        })
+        document.body.append(element)
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        const result = document.execCommand('copy')
+        setTimeout(() => element.remove(), 100)
       }
     }
 
