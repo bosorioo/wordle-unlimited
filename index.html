@@ -776,8 +776,17 @@
             currentGuess[index] = undefined
           } else if (
             ultra &&
-            state.lettersTried[currentGuess[index]] === 'semi' &&
-            state.wordsTried.some(w => w.charAt(index) === currentGuess[index])
+            (
+              (
+                state.lettersTried[currentGuess[index]] === 'semi' &&
+                attemptMade[index] === currentGuess[index]
+              ) ||
+              (
+                state.lettersTried[currentGuess[index]] === 'correct' &&
+                attemptMade[index] === currentGuess[index] &&
+                wordToGuess[index] !== currentGuess[index]
+              )
+            )
           ) {
             return `${index + 1}${s} letter must not be ${currentGuess[index].toUpperCase()}`
           }
