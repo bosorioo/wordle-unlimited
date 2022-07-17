@@ -551,6 +551,9 @@
       div.classList.add('toast')
       div.append(span)
       div.style.zIndex = zIndex
+      if (state.wordsTried.length === 1) {
+        div.style.top = '32vh'
+      }
       span.innerText = message
       document.body.append(div)
       setTimeout(() => {
@@ -757,8 +760,8 @@
       })
     }
 
-    function checkHardInput (word, ultra = false) {
-      for (let attemptMade of state.wordsTried) {
+    function checkHardInput (word, ultra = false, attemptsMade = state.wordsTried) {
+      for (let attemptMade of attemptsMade) {
         let wordToGuess = Array.from(state.wordToGuess)
         let currentGuess = Array.from(word)
         if (!attemptMade) {
@@ -864,12 +867,13 @@
 
     function getPossibleWordsLeft () {
       const dictionary = dictionaries[state.config.wordLength]
+      const attemptsMade = isGameOver() ? state.wordsTried.slice(0, -1) : undefined
       return [
         dictionary.wordsGuessable,
         dictionary.wordsAcceptable
       ]
         .flatMap(s => Array.from(s))
-        .filter(w => !checkHardInput(w, state.config.ultraHardMode))
+        .filter(w => !checkHardInput(w, state.config.ultraHardMode, attemptsMade))
     }
 
     function isGameOver () {
