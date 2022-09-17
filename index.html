@@ -874,7 +874,7 @@
       if (isGameOver()) {
         hintsPromise.then(() => setTimeout(() => onEndGame(), 500))
       } else {
-        setupCandidatesLeft()
+        hintsPromise.then(() => setupCandidatesLeft())
       }
       saveState()
     }
@@ -1329,7 +1329,13 @@
             letterDiv.append(span)
           }
         }
-        addHints(wordDiv, null, true).then(() => setupCandidatesLeft())
+        const promise = addHints(wordDiv, null, true)
+        if (wordTriedIndex === state.wordsTried.length - 1) {
+          promise.then(() => setupCandidatesLeft())
+        }
+      }
+      if (state.wordsTried.length === 0) {
+        setupCandidatesLeft()
       }
     }
 
@@ -1342,10 +1348,10 @@
       }
     }
 
-    function resetGame (resetInterface) {
+    function resetGame (resetInterface, nextWord) {
       state.wordsTried = []
       state.lettersTried = {}
-      state.wordToGuess = getWordToGuess()
+      state.wordToGuess = nextWord || getWordToGuess()
       if (resetInterface) {
         resetUI()
       }
