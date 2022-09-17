@@ -541,6 +541,14 @@
       guessDistribution: {}
     }
 
+    function cloneState () {
+      return {
+        lettersTried: { ...state.lettersTried },
+        wordsTried: state.wordsTried.slice(),
+        wordToGuess: state.wordToGuess
+      }
+    }
+
     function displayToast (message, duration = 1.5e3, zIndex = 500) {
       document.querySelectorAll('.toast').forEach(node => node.remove())
       if (!message) {
@@ -590,74 +598,81 @@
     }
 
     function addHints (wordDiv, onEndAnimation, quick = state.config.quickAnimations) {
-      if (!wordDiv) {
-        wordDiv = getCurrentWordDiv()
-      }
-      let lettersToGuess = Array.from(state.wordToGuess)
-      let lettersGuessed = Array.from(wordDiv.textContent.toLowerCase())
-      let lettersDivs = Array.from(wordDiv.children)
-      let hints = lettersToGuess.slice()
-      let animationDuration = 350
-      let letterClasses = {}
-      for (let index = 0; index < state.config.wordLength; index++) {
-        let correctLetter = lettersToGuess[index]
-        let guessedLetter = lettersGuessed[index]
-        if (correctLetter === guessedLetter) {
-          hints[index] = undefined
-          letterClasses[index] = 'correct'
+      return new Promise((resolve, reject) => {
+        if (!wordDiv) {
+          wordDiv = getCurrentWordDiv()
         }
-      }
-      for (let index = 0; index < state.config.wordLength; index++) {
-        if (letterClasses[index] === 'correct') {
-          continue
+        let lettersToGuess = Array.from(state.wordToGuess)
+        let lettersGuessed = Array.from(wordDiv.textContent.toLowerCase())
+        let lettersDivs = Array.from(wordDiv.children)
+        let hints = lettersToGuess.slice()
+        let animationDuration = 350
+        let letterClasses = {}
+        for (let index = 0; index < state.config.wordLength; index++) {
+          let correctLetter = lettersToGuess[index]
+          let guessedLetter = lettersGuessed[index]
+          if (correctLetter === guessedLetter) {
+            hints[index] = undefined
+            letterClasses[index] = 'correct'
+          }
         }
-        let correctLetter = lettersToGuess[index]
-        let guessedLetter = lettersGuessed[index]
-        let letterClass = 'incorrect'
-        if (hints.includes(guessedLetter)) {
-          let semiIndex = hints.indexOf(guessedLetter)
-          hints[semiIndex] = undefined
-          letterClass = 'semi'
+        for (let index = 0; index < state.config.wordLength; index++) {
+          if (letterClasses[index] === 'correct') {
+            continue
+          }
+          let correctLetter = lettersToGuess[index]
+          let guessedLetter = lettersGuessed[index]
+          let letterClass = 'incorrect'
+          if (hints.includes(guessedLetter)) {
+            let semiIndex = hints.indexOf(guessedLetter)
+            hints[semiIndex] = undefined
+            letterClass = 'semi'
+          }
+          letterClasses[index] = letterClass
         }
-        letterClasses[index] = letterClass
-      }
-      for (let index = 0; index < state.config.wordLength; index++) {
-        let letterDiv = lettersDivs[index]
-        let guessedLetter = lettersGuessed[index]
-        let keyboardKeyState = state.lettersTried[guessedLetter] || ''
-        let keyboardKeyNextState = letterClasses[index]
-        letterDiv
-          .animate({ transform: [ 'rotateX(0)', 'rotateX(-90deg)' ] }, {
-            duration: animationDuration * 0.5,
-            delay: index * animationDuration - (quick ? 250 : 20) * index,
-            fill: 'forwards'
-          })
-          .addEventListener('finish', (event) => {
-            event.target.finish()
-            let letterClass = letterClasses[index]
-            if (letterClass) {
-              letterDiv.classList.add(letterClass)
-              let keyboardKeyState = state.lettersTried[guessedLetter] || ''
-              if (!keyboardKeyState || keyboardKeyState === 'incorrect' ||
-                  (keyboardKeyState === 'semi' && letterClass === 'correct') ||
-                  (keyboardKeyState === letterClass)) {
-                state.lettersTried[guessedLetter] = letterClass
-                let keyboardBtn = document.querySelector('.key-' + guessedLetter)
-                if (keyboardBtn) {
-                  keyboardBtn.classList.remove('incorrect', 'semi')
-                  keyboardBtn.classList.add(keyboardKeyNextState)
-                }
-              }
-            }
-            let anim = letterDiv.animate({ transform: [ 'rotateX(90deg)', 'rotateX(0deg)' ] }, {
+        for (let index = 0; index < state.config.wordLength; index++) {
+          let letterDiv = lettersDivs[index]
+          let guessedLetter = lettersGuessed[index]
+          let keyboardKeyState = state.lettersTried[guessedLetter] || ''
+          let keyboardKeyNextState = letterClasses[index]
+          letterDiv
+            .animate({ transform: [ 'rotateX(0)', 'rotateX(-90deg)' ] }, {
               duration: animationDuration * 0.5,
+              delay: index * animationDuration - (quick ? 250 : 20) * index,
               fill: 'forwards'
             })
-            if (index === state.config.wordLength - 1 && typeof onEndAnimation === 'function') {
-              anim.addEventListener('finish', onEndAnimation)
-            }
-          })
-      }
+            .addEventListener('finish', (event) => {
+              event.target.finish()
+              let letterClass = letterClasses[index]
+              if (letterClass) {
+                letterDiv.classList.add(letterClass)
+                let keyboardKeyState = state.lettersTried[guessedLetter] || ''
+                if (!keyboardKeyState || keyboardKeyState === 'incorrect' ||
+                    (keyboardKeyState === 'semi' && letterClass === 'correct') ||
+                    (keyboardKeyState === letterClass)) {
+                  state.lettersTried[guessedLetter] = letterClass
+                  let keyboardBtn = document.querySelector('.key-' + guessedLetter)
+                  if (keyboardBtn) {
+                    keyboardBtn.classList.remove('incorrect', 'semi')
+                    keyboardBtn.classList.add(keyboardKeyNextState)
+                  }
+                }
+              }
+              let anim = letterDiv.animate({ transform: [ 'rotateX(90deg)', 'rotateX(0deg)' ] }, {
+                duration: animationDuration * 0.5,
+                fill: 'forwards'
+              })
+              if (index === state.config.wordLength - 1) {
+                anim.addEventListener('finish', () => {
+                  resolve()
+                  if (typeof onEndAnimation === 'function') {
+                    onEndAnimation()
+                  }
+                })
+              }
+            })
+        }
+      })
     }
 
     function fillLetter (letter) {
@@ -760,9 +775,9 @@
       })
     }
 
-    function checkHardInput (word, ultra = false, attemptsMade = state.wordsTried) {
-      for (let attemptMade of attemptsMade) {
-        let wordToGuess = Array.from(state.wordToGuess)
+    function checkHardInput (word, ultra = false, stateData = state) {
+      for (let attemptMade of stateData.wordsTried) {
+        let wordToGuess = Array.from(stateData.wordToGuess)
         let currentGuess = Array.from(word)
         if (!attemptMade) {
           continue
@@ -781,11 +796,11 @@
             ultra &&
             (
               (
-                state.lettersTried[currentGuess[index]] === 'semi' &&
+                stateData.lettersTried[currentGuess[index]] === 'semi' &&
                 attemptMade[index] === currentGuess[index]
               ) ||
               (
-                state.lettersTried[currentGuess[index]] === 'correct' &&
+                stateData.lettersTried[currentGuess[index]] === 'correct' &&
                 attemptMade[index] === currentGuess[index] &&
                 wordToGuess[index] !== currentGuess[index]
               )
@@ -808,14 +823,14 @@
         }
         if (ultra) {
           for (let index = 0; index < wordToGuess.length; index++) {
-            if (currentGuess[index] && !state.wordToGuess.includes(currentGuess[index]) && state.lettersTried[currentGuess[index]] ) {
+            if (currentGuess[index] && !stateData.wordToGuess.includes(currentGuess[index]) && stateData.lettersTried[currentGuess[index]] ) {
               return `Must not contain letter ${currentGuess[index].toUpperCase()}`
             }
-            if (currentGuess[index] && /^(semi|correct)$/.test(state.lettersTried[currentGuess[index]])) {
+            if (currentGuess[index] && /^(semi|correct)$/.test(stateData.lettersTried[currentGuess[index]])) {
               let regex = new RegExp(`[^${currentGuess[index]}]`, 'ig')
               let repetitions = word.replace(regex, '').length
-              let lastAttemptRepetitions = state.wordsTried.slice(-1)[0].replace(regex, '').length
-              let answerRepetitions = state.wordToGuess.replace(regex, '').length
+              let lastAttemptRepetitions = stateData.wordsTried.slice(-1)[0].replace(regex, '').length
+              let answerRepetitions = stateData.wordToGuess.replace(regex, '').length
               if (lastAttemptRepetitions > answerRepetitions && repetitions >= lastAttemptRepetitions) {
                 return `There are too many ${currentGuess[index].toUpperCase()}s`
               }
@@ -829,7 +844,7 @@
       word = word.replace(/[^a-z]+/gi, '').toLowerCase()
       const dictionary = dictionaries[state.config.wordLength]
       if (word.length !== state.config.wordLength) {
-        if (!isAnimatingHints()) {
+        if (!isAnimatingHints() && !isGameOver()) {
           displayToast('Not enough letters')
         }
         return
@@ -852,28 +867,27 @@
         fillLetter(letter)
       }
       const div = getCurrentWordDiv()
-      addHints(div, () => {
-        setupCandidatesLeft()
-        setTimeout(() => {
-          if (isGameOver()) {
-            onEndGame()
-          }
-        }, 500)
-      })
       div.classList.add('attempted')
+      state.previousAttemptState = cloneState()
       state.wordsTried.push(word)
+      const hintsPromise = addHints(div)
+      if (isGameOver()) {
+        hintsPromise.then(() => setTimeout(() => onEndGame(), 500))
+      } else {
+        setupCandidatesLeft()
+      }
       saveState()
     }
 
     function getPossibleWordsLeft () {
       const dictionary = dictionaries[state.config.wordLength]
-      const attemptsMade = isGameOver() ? state.wordsTried.slice(0, -1) : undefined
+      const stateToConsider = isGameOver() ? state.previousAttemptState : state
       return [
         dictionary.wordsGuessable,
         dictionary.wordsAcceptable
       ]
         .flatMap(s => Array.from(s))
-        .filter(w => !checkHardInput(w, state.config.ultraHardMode, attemptsMade))
+        .filter(w => !checkHardInput(w, state.config.ultraHardMode, stateToConsider))
     }
 
     function isGameOver () {
@@ -1108,6 +1122,7 @@
         state.victoryStreak = 0
       }
       state.gamesPlayed++
+      state.previousGame = cloneState()
       saveState()
       displayToast(message, toastDuration)
       setTimeout(() => {
@@ -1191,7 +1206,6 @@
       addSliderSetting('quickAnimations', 'Quick Animations', 'Makes animations run much quicker.')
       setupWordList()
       setupKeyboard()
-      setupCandidatesLeft()
 
       const endActionsDiv = document.querySelector('.end-actions')
       const shareButton = createShareButtonEl({ padding: '12px', gridRow: 'span 2' })
@@ -1315,7 +1329,7 @@
             letterDiv.append(span)
           }
         }
-        addHints(wordDiv, null, true)
+        addHints(wordDiv, null, true).then(() => setupCandidatesLeft())
       }
     }
 
